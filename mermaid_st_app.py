@@ -1,5 +1,5 @@
 # streamlit_app.py
-# Mermaid Diagram Studio — v3.2 (car showroom flow as DEFAULT)
+# Mermaid Diagram Studio — v3.2.2 (car showroom flow as DEFAULT)
 # Run:
 #   pip install streamlit
 #   streamlit run streamlit_app.py
@@ -346,7 +346,6 @@ with col2:
           mermaid.initialize({CONFIG});
           mermaid.run({{ nodes: [document.getElementById('mm')] }}).then(() => {{
             fitSVG();
-            {AUTO_COLOR_ACTORS}
           }}).catch(e => {{
             document.getElementById('mm').innerHTML = '<pre style="color:#b00020;">' + e.toString() + '</pre>';
           }});
@@ -465,8 +464,7 @@ with col2:
         ZOOM=zoom/100.0,
         LOADER=mermaid_loader,
         CONFIG=json.dumps(m_config),
-        ESC=escaped,
-        AUTO_COLOR_ACTORS="/* sequence only */" if not auto_color_actors else "/* sequence only */"
+        ESC=escaped
     )
 
     st.components.v1.html(html_str, height=preview_h, scrolling=True)
