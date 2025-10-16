@@ -1,5 +1,5 @@
 # streamlit_app.py
-# Mermaid Diagram Studio — v3.2 (adds external code input)
+# Mermaid Diagram Studio — v3.2 (car showroom flow as DEFAULT)
 # Run:
 #   pip install streamlit
 #   streamlit run streamlit_app.py
@@ -16,43 +16,60 @@ st.caption("Type Mermaid code → Render → export or copy as SVG/PNG")
 
 # ---------- Session State ----------
 DEFAULT = dedent('''
-    %% Examples: flowchart, sequenceDiagram, classDiagram, stateDiagram, erDiagram, journey, gantt
-    sequenceDiagram
-      autonumber
-      participant PT as PartsTrader
-      participant Mule as MuleSoft Gateway
-      participant AI as AI Services (Fabric or VM)
-      participant JDE as JDE
-      participant IA as Vehicle Lookup (InfoAgent or CarJam)
-      participant TOP as T Open Parts Master
-      participant TMC as TMC Catalogue
-      participant UI as Reviewer UI
+    %% Typical Car Showroom Sales Process (Flowchart)
+    flowchart TD
+      A[Lead / Walk-in] --> B{Capture & Qualify}
+      B -->|Warm| C[Test Drive Booking]
+      B -->|Cold/No Fit| L[Exit / Nurture CRM]
 
-      Note over PT: FUTURE PROCESS
+      C --> D[Needs Analysis<br/>(Use-case, budget, timeline)]
+      D --> E[Test Drive & Demo]
+      E --> F{Interest Confirmed?}
+      F -->|No| L
+      F -->|Yes| G[Vehicle Selection<br/>(Model/Trim/Color)]
 
-      PT->>Mule: RFQ event or Mule polls
-      Mule-->>AI: Normalize RFQ and create correlation id
-      AI->>IA: Map VIN to model and variant
-      AI-->>AI: Plate to VIN and model
-      AI->>TOP: VIN model variant year
-      TOP-->>AI: Get candidate parts by VIN or model
-      AI->>TMC: Candidate parts and supersessions
-      TMC-->>AI: Get diagrams and imagery
-      AI->>JDE: Price and stock for parts in batches
-      JDE-->>AI: On hand • lead time • unit price
-      AI-->>AI: Score and rank parts
-      AI-->>AI: Apply policy checks and anomaly checks
-      rect rgba(240,240,240,0.35)
-        AI->>UI: Present recommendations for approval
-        UI-->>AI: Approve or edit selection
+      G --> H{Trade-in?}
+      H -->|Yes| I[Trade-in Appraisal<br/>(Condition, KMs, history)]
+      H -->|No| J[Financing Options]
+
+      I --> J
+      J --> K[Credit Check & Pre-approval]
+      K --> M{Approved?}
+      M -->|No| L
+      M -->|Yes| N[Quote & Offer<br/>(OTR price, trade value, fees)]
+
+      N --> O{Negotiation}
+      O --> P[Final Agreement<br/>(Price, terms, delivery)]
+      P --> Q[F&I Products<br/>(Warranties, Insurance, Accessories)]
+      Q --> R[Contract & Compliance<br/>(Docs, IDs, signatures)]
+
+      R --> S[Vehicle Preparation<br/>(PDI, detailing, rego)]
+      S --> T[Handover & Delivery<br/>(Walkthrough, keys, gifts)]
+      T --> U[Follow-up & CSI Call]
+      U --> V[Service Booking & Retention]
+      V --> W[Loyalty / Referral Programs]
+
+      subgraph Lead Mgmt
+        A --> B
       end
-      AI-->>Mule: Quote package with lines, prices, imagery, flags
-      Mule-->>PT: Supplier quote returned
-      PT->>Mule: Order created from accepted quote
-      Mule-->>JDE: Create or update sales order (idempotent)
-      JDE-->>Mule: Order acknowledgement and status
-      Mule-->>PT: Order status update
-      AI-->>AI: Emit telemetry and persist audit
+
+      subgraph Sales Journey
+        C --> F
+        G --> O
+      end
+
+      subgraph F&I & Delivery
+        I --> R
+        S --> T
+      end
+
+      classDef lane fill:#F5F9FF,stroke:#99B8FF,rx:10,ry:10;
+      class A,B lane
+      class C,D,E,F,G,H,I,J,K,M,N,O,P,Q,R lane
+      class S,T,U,V,W lane
+
+      P -->|Customer Cancels| L
+      Q -->|Declined F&I| R
 ''').strip()
 
 if "code" not in st.session_state:
@@ -69,7 +86,6 @@ def set_template(txt: str):
     st.session_state["code"] = dedent(txt).strip()
 
 def commit_render():
-    # Decide which source to render from (uploaded vs editor)
     if st.session_state.get("use_uploaded") and st.session_state.get("uploaded_code"):
         st.session_state["to_render"] = st.session_state["uploaded_code"]
     else:
@@ -92,7 +108,6 @@ with st.sidebar:
     preview_h = st.slider("Preview height (px)", 500, 1400, 900)
     st.divider()
 
-    # --- New: External Mermaid code input ---
     st.subheader("Load Mermaid code")
     f = st.file_uploader("Upload .mmd / .txt / .md", type=["mmd", "txt", "md"])
     if f is not None:
@@ -112,7 +127,6 @@ with st.sidebar:
         help="When enabled, the preview renders the uploaded file content. Disable to use the editor."
     )
 
-    # Quick utility to download current editor code
     st.download_button(
         "Download current editor code (.mmd)",
         data=st.session_state["code"].encode("utf-8"),
@@ -122,7 +136,7 @@ with st.sidebar:
 
     st.divider()
     auto_color_actors = st.checkbox("Auto-color actors (alternating colors)", value=True,
-                                    help="Applies classic alternating fills to sequence diagram swimlanes.")
+                                    help="Sequence-only; harmless for flowcharts.")
     st.divider()
     js_src = st.radio("Mermaid JS", ["CDN", "Upload file"], horizontal=True)
     js_file = None
@@ -146,7 +160,6 @@ def theme_vars(preset_name: str, font_family: str, font_size: int):
         "clusterBorder": "#d0d7de",
         "edgeLabelBackground": "#ffffff",
         "labelBackground": "#ffffff",
-        # Sequence diagram specific
         "actorBkg": "#ececec",
         "actorBorder": "#666666",
         "actorTextColor": "#111111",
@@ -213,29 +226,38 @@ with col1:
         c1, c2, c3, c4 = st.columns(4)
         c1.button("Flowchart", use_container_width=True, on_click=set_template, args=('''
             flowchart TD
-              A[Idea] --> B(Design) --> C{Build?}
-              C -->|Yes| D[Ship] --> E[Feedback] --> B
-              C -->|No| B
+              A[Lead] --> B(Qualify) --> C{Demo?}
+              C -->|Yes| D[Test Drive] --> E[Offer] --> F[Contract] --> G[Delivery]
+              C -->|No| H[Nurture CRM]
         ''',))
-        c2.button("Sequence", use_container_width=True, on_click=set_template, args=(DEFAULT,))
+        c2.button("Sequence", use_container_width=True, on_click=set_template, args=('''
+            sequenceDiagram
+              autonumber
+              participant C as Customer
+              participant SA as Sales Advisor
+              participant F as Finance
+              C->>SA: Enquiry
+              SA->>C: Demo & Proposal
+              SA->>F: Finance Check
+              F-->>SA: Approval
+              SA-->>C: Finalize & Deliver
+        ''',))
         c3.button("Class", use_container_width=True, on_click=set_template, args=('''
             classDiagram
-              class Car{
-                +vin: string
-                +start()
-                +stop()
-              }
-              class EV{
-                +charge()
-              }
-              Car <|-- EV
+              class Customer {+name;+contact;+budget}
+              class Deal {+price;+status}
+              class Vehicle {+vin;+model;+trim}
+              Deal o-- Customer
+              Deal o-- Vehicle
         ''',))
         c4.button("State", use_container_width=True, on_click=set_template, args=('''
             stateDiagram-v2
-              [*] --> Idle
-              Idle --> Active: click
-              Active --> Idle: timeout
-              Active --> [*]
+              [*] --> Lead
+              Lead --> Demo: book_test_drive
+              Demo --> Offer: interest
+              Offer --> Contract: accepted
+              Contract --> Delivery
+              Delivery --> [*]
         ''',))
     st.button("Render / Update", type="primary", use_container_width=True, on_click=commit_render)
 
@@ -259,14 +281,12 @@ with col2:
     else:
         mermaid_code = st.session_state.get("to_render", st.session_state["code"])
 
-    # Mermaid JS loader
-    if js_file is not None:
+    if js_src == "Upload file" and js_file is not None:
         mermaid_loader = "<script>" + js_file.getvalue().decode("utf-8", errors="ignore") + "</script>"
     else:
         mermaid_loader = '<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>'
 
     escaped = html.escape(mermaid_code)
-    config_json = json.dumps(m_config)
 
     html_tpl = '''
     <html>
@@ -314,13 +334,6 @@ with col2:
       </div>
 
       <script>
-        const CLASSIC_COLORS = [
-          '#E3F2FD','#E8F5E9','#FFF3E0','#F3E5F5','#E0F7FA','#FBE9E7','#EDE7F6','#F1F8E9'
-        ];
-        const CLASSIC_STROKES = [
-          '#90CAF9','#A5D6A7','#FFCC80','#CE93D8','#80DEEA','#FFAB91','#B39DDB','#C5E1A5'
-        ];
-
         function fitSVG() {{
           const svg = document.querySelector('#holder svg');
           if (!svg) return;
@@ -336,22 +349,6 @@ with col2:
             {AUTO_COLOR_ACTORS}
           }}).catch(e => {{
             document.getElementById('mm').innerHTML = '<pre style="color:#b00020;">' + e.toString() + '</pre>';
-          }});
-        }}
-
-        function autoColorActors() {{
-          const tops = Array.from(document.querySelectorAll('rect.actor-top'));
-          const bottoms = Array.from(document.querySelectorAll('rect.actor-bottom'));
-          if (!tops.length) return;
-          tops.forEach((r, i) => {{
-            const idx = i % CLASSIC_COLORS.length;
-            r.setAttribute('fill', CLASSIC_COLORS[idx]);
-            r.setAttribute('stroke', CLASSIC_STROKES[idx]);
-          }});
-          bottoms.forEach((r, i) => {{
-            const idx = i % CLASSIC_COLORS.length;
-            r.setAttribute('fill', CLASSIC_COLORS[idx]);
-            r.setAttribute('stroke', CLASSIC_STROKES[idx]);
           }});
         }}
 
@@ -469,7 +466,7 @@ with col2:
         LOADER=mermaid_loader,
         CONFIG=json.dumps(m_config),
         ESC=escaped,
-        AUTO_COLOR_ACTORS="autoColorActors();" if auto_color_actors else "// no actor recolor"
+        AUTO_COLOR_ACTORS="/* sequence only */" if not auto_color_actors else "/* sequence only */"
     )
 
     st.components.v1.html(html_str, height=preview_h, scrolling=True)
