@@ -12,6 +12,8 @@ import json
 st.set_page_config(page_title="Mermaid Diagram Studio", layout="wide")
 
 st.title("Mermaid Diagram Studio")
+st.caption("Designed by: LIJU VARGHESE")
+
 st.caption("Type Mermaid code → Render → export or copy as SVG/PNG")
 
 # ---------- Session State ----------
