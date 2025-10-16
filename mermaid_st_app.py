@@ -1,6 +1,5 @@
-
 # streamlit_app.py
-# Mermaid Diagram Studio — v3.1
+# Mermaid Diagram Studio — v3.2 (adds external code input)
 # Run:
 #   pip install streamlit
 #   streamlit run streamlit_app.py
@@ -60,13 +59,21 @@ if "code" not in st.session_state:
     st.session_state["code"] = DEFAULT
 if "to_render" not in st.session_state:
     st.session_state["to_render"] = st.session_state["code"]
+if "uploaded_code" not in st.session_state:
+    st.session_state["uploaded_code"] = None
+if "use_uploaded" not in st.session_state:
+    st.session_state["use_uploaded"] = False
 
 # ---------- Callbacks ----------
 def set_template(txt: str):
     st.session_state["code"] = dedent(txt).strip()
 
 def commit_render():
-    st.session_state["to_render"] = st.session_state["code"]
+    # Decide which source to render from (uploaded vs editor)
+    if st.session_state.get("use_uploaded") and st.session_state.get("uploaded_code"):
+        st.session_state["to_render"] = st.session_state["uploaded_code"]
+    else:
+        st.session_state["to_render"] = st.session_state["code"]
 
 # ---------- Sidebar Controls ----------
 with st.sidebar:
@@ -84,13 +91,43 @@ with st.sidebar:
     zoom = st.slider("Zoom (%)", 80, 200, 100)
     preview_h = st.slider("Preview height (px)", 500, 1400, 900)
     st.divider()
+
+    # --- New: External Mermaid code input ---
+    st.subheader("Load Mermaid code")
+    f = st.file_uploader("Upload .mmd / .txt / .md", type=["mmd", "txt", "md"])
+    if f is not None:
+        try:
+            content = f.read().decode("utf-8", errors="ignore")
+        except Exception:
+            content = None
+        if content:
+            st.session_state["uploaded_code"] = content.strip()
+            st.success("Uploaded code loaded into memory.")
+        else:
+            st.warning("Could not read the uploaded file. Please check encoding.")
+
+    st.session_state["use_uploaded"] = st.toggle(
+        "Use uploaded code (if available)",
+        value=st.session_state.get("use_uploaded", False),
+        help="When enabled, the preview renders the uploaded file content. Disable to use the editor."
+    )
+
+    # Quick utility to download current editor code
+    st.download_button(
+        "Download current editor code (.mmd)",
+        data=st.session_state["code"].encode("utf-8"),
+        file_name="diagram.mmd",
+        mime="text/plain"
+    )
+
+    st.divider()
     auto_color_actors = st.checkbox("Auto-color actors (alternating colors)", value=True,
                                     help="Applies classic alternating fills to sequence diagram swimlanes.")
     st.divider()
     js_src = st.radio("Mermaid JS", ["CDN", "Upload file"], horizontal=True)
     js_file = None
     if js_src == "Upload file":
-        js_file = st.file_uploader("Upload mermaid.min.js", type=["js"])
+        js_file = st.file_uploader("Upload mermaid.min.js", type=["js"], key="mermaid_js_file")
 
 # Theme variables
 def theme_vars(preset_name: str, font_family: str, font_size: int):
@@ -131,7 +168,6 @@ def theme_vars(preset_name: str, font_family: str, font_size: int):
             "lineColor": "#1D1D1D",
             "clusterBkg": "#FCFCFC",
             "clusterBorder": "#C9CFD6",
-            # Sequence accents
             "actorBkg": "#FDE8E9",
             "actorBorder": "#D61A20",
             "noteBkgColor": "#FFF1F2",
@@ -217,15 +253,20 @@ with col2:
         "er": {"useMaxWidth": True},
         "gantt": {"axisFormat": "%d %b"}
     }
-    config_json = json.dumps(m_config)
 
+    if st.session_state.get("use_uploaded") and st.session_state.get("uploaded_code"):
+        mermaid_code = st.session_state["uploaded_code"]
+    else:
+        mermaid_code = st.session_state.get("to_render", st.session_state["code"])
+
+    # Mermaid JS loader
     if js_file is not None:
         mermaid_loader = "<script>" + js_file.getvalue().decode("utf-8", errors="ignore") + "</script>"
     else:
         mermaid_loader = '<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>'
 
-    mermaid_code = st.session_state.get("to_render", st.session_state["code"])
     escaped = html.escape(mermaid_code)
+    config_json = json.dumps(m_config)
 
     html_tpl = '''
     <html>
@@ -314,14 +355,11 @@ with col2:
           }});
         }}
 
-        function getSVGEl() {{
-          return document.querySelector('#holder svg');
-        }}
+        function getSVGEl() {{ return document.querySelector('#holder svg'); }}
 
         function getSVGBlobAndXML() {{
           const svg = getSVGEl();
           if (!svg) return null;
-          // White background rect if missing
           if (!svg.querySelector('rect.__bg__')) {{
             const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
             const vb = svg.viewBox.baseVal;
@@ -337,10 +375,7 @@ with col2:
           const clone = svg.cloneNode(true);
           clone.removeAttribute('style');
           const xml = new XMLSerializer().serializeToString(clone);
-          return {{
-            xml,
-            blob: new Blob([xml], {{ type: 'image/svg+xml;charset=utf-8' }})
-          }};
+          return {{ xml, blob: new Blob([xml], {{ type: 'image/svg+xml;charset=utf-8' }}) }};
         }}
 
         function svgToCanvas(cb) {{
@@ -351,7 +386,7 @@ with col2:
           const url = URL.createObjectURL(s.blob);
           const img = new Image();
           img.onload = function() {{
-            const scale = 3; // hi-res
+            const scale = 3;
             const canvas = document.createElement('canvas');
             canvas.width = Math.max(1, Math.floor(vb.width * scale));
             canvas.height = Math.max(1, Math.floor(vb.height * scale));
