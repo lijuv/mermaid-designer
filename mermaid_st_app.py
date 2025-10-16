@@ -1,5 +1,5 @@
 # streamlit_app_min.py
-# Minimal Mermaid viewer (no fancy sidebar). Tested syntax-only.
+# Minimal Mermaid viewer (robust against $ in code)
 # Run:  pip install streamlit
 #       streamlit run streamlit_app_min.py
 
@@ -48,13 +48,17 @@ zoom = st.slider("Zoom (%)", 80, 200, 100)
 preview_h = st.slider("Preview height (px)", 500, 1400, 900)
 font = st.text_input("Font family", "Inter, Segoe UI, Roboto, Helvetica, Arial, sans-serif")
 
+# Mermaid config
 m_config = {
     "startOnLoad": False,
     "securityLevel": "loose",
     "theme": "base",
     "themeVariables": {"fontFamily": font, "fontSize": "14"}
 }
-escaped = html.escape(code)
+
+# Escape for HTML, then escape $ for Template to avoid KeyError
+escaped_html = html.escape(code)
+escaped_for_template = escaped_html.replace("$", "$$")
 
 tpl = Template(r'''
 <!doctype html>
@@ -98,8 +102,12 @@ tpl = Template(r'''
     }
     function runMermaid(){
       mermaid.initialize(config);
-      mermaid.run({ nodes: [document.getElementById('mm')] }).then(()=>{ fitSVG(); })
-      .catch(e => { document.getElementById('mm').innerHTML = '<pre style="color:#b00020;">'+ e.toString() +'</pre>'; });
+      mermaid.run({ nodes: [document.getElementById('mm')] })
+        .then(()=>{ fitSVG(); })
+        .catch(e => {
+          document.getElementById('mm').innerHTML =
+            '<pre style="color:#b00020;">'+ e.toString() +'</pre>';
+        });
     }
     function getSVGEl(){ return document.querySelector('#holder svg'); }
     function getSVGBlobAndXML(){
@@ -140,11 +148,11 @@ tpl = Template(r'''
 </html>
 ''')
 
-html_str = tpl.substitute(
+html_str = tpl.safe_substitute(  # <-- safe_substitute avoids KeyError on stray $ in template
     FONT=font,
     PADDING=str(padding),
     ZOOM=str(zoom/100.0),
-    ESCAPED=escaped,
+    ESCAPED=escaped_for_template,  # <-- our Mermaid HTML with $ escaped for Template
     CONFIG=json.dumps(m_config)
 )
 
